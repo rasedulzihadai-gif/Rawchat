@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
+  ArrowLeft,
   X,
   Search,
   KeyRound,
@@ -55,7 +56,10 @@ export default function ModelPicker({
   onPick: (providerId: string, model: string) => void;
 }) {
   const [query, setQuery] = useState("");
+  // NOTE: the parent remounts this dialog (via `key`) every time it opens,
+  // so these initializers always start from the current active provider.
   const [selId, setSelId] = useState(activeProviderId || "groq");
+  const [mobileDetail, setMobileDetail] = useState(false);
   const [showKey, setShowKey] = useState(false);
   const [fetched, setFetched] = useState<Record<string, string[]>>({});
   const [fetchState, setFetchState] = useState<{ loading: boolean; ok?: boolean; err?: string }>({ loading: false });
@@ -64,11 +68,6 @@ export default function ModelPicker({
   const [addingCustom, setAddingCustom] = useState(false);
   const [cpName, setCpName] = useState("");
   const [cpUrl, setCpUrl] = useState("");
-
-  useEffect(() => {
-    if (open) setSelId(activeProviderId || "groq");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
 
   const all: ProviderRef[] = useMemo(
     () => [
@@ -165,8 +164,12 @@ export default function ModelPicker({
         </div>
 
         <div className="flex min-h-0 flex-1">
-          {/* left: provider list */}
-          <div className="flex w-full max-w-[290px] flex-col border-r border-line max-sm:max-w-none">
+          {/* left: provider list (step 1 of 2 on mobile) */}
+          <div
+            className={`w-full max-w-[290px] flex-col border-r border-line max-sm:max-w-none max-sm:border-r-0 sm:flex ${
+              mobileDetail ? "max-sm:hidden" : "max-sm:flex"
+            }`}
+          >
             <div className="p-3">
               <div className="flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm focus-within:border-line-strong">
                 <Search size={14} className="text-muted" />
@@ -189,6 +192,7 @@ export default function ModelPicker({
                       setSelId(r.p.id);
                       setFetchState({ loading: false });
                       setShowKeyInput(false);
+                      setMobileDetail(true);
                     }}
                     className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-left transition ${
                       selId === r.p.id ? "bg-elevated" : "hover:bg-white/[0.04]"
@@ -267,6 +271,7 @@ export default function ModelPicker({
                           };
                           onAddCustomProvider(p);
                           setSelId(p.id);
+                          setMobileDetail(true);
                           setAddingCustom(false);
                           setCpName("");
                           setCpUrl("");
@@ -288,10 +293,20 @@ export default function ModelPicker({
             </div>
           </div>
 
-          {/* right: provider detail */}
+          {/* right: provider detail (step 2 of 2 on mobile) */}
           {sel && (
-            <div className="flex min-w-0 flex-1 flex-col max-sm:hidden">
+            <div
+              className={`min-w-0 flex-1 flex-col sm:flex ${
+                mobileDetail ? "max-sm:flex" : "max-sm:hidden"
+              }`}
+            >
               <div className="border-b border-line px-5 py-4">
+                <button
+                  onClick={() => setMobileDetail(false)}
+                  className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-muted transition hover:text-cream sm:hidden"
+                >
+                  <ArrowLeft size={13} /> All providers
+                </button>
                 <div className="flex items-center gap-3">
                   <span
                     className="size-2.5 rounded-full"

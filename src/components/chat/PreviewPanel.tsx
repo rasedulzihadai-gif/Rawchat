@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { X, Code2, MonitorPlay, RefreshCw, ExternalLink, Copy, Check } from "lucide-react";
 
 export interface Artifact {
@@ -40,7 +40,14 @@ export default function PreviewPanel({
     } catch {
       return "";
     }
-  }, [code, frameKey]);
+  }, [code]);
+
+  // Revoke stale object URLs so long sessions don't leak memory.
+  useEffect(() => {
+    return () => {
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [blobUrl]);
 
   if (!artifact) return null;
 

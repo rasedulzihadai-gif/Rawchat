@@ -74,8 +74,9 @@ export default function ChatApp() {
   const refreshConvs = useCallback(async () => {
     try {
       const r = await fetch("/api/conversations");
-      const j = await r.json();
-      setConvs(j.conversations || []);
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) setConvs(j.conversations || []);
+      // 503 = no database configured; sidebar simply stays empty.
     } catch {
       /* db may be unavailable */
     }
@@ -240,10 +241,13 @@ export default function ChatApp() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ providerId: active.providerId, model: active.model }),
           });
-          const j = await r.json();
-          convId = j.conversation.id;
-          setConvs((prev) => [j.conversation, ...prev]);
-          setActiveId(convId);
+          const j = await r.json().catch(() => ({}));
+          if (r.ok && j.conversation?.id) {
+            convId = j.conversation.id;
+            setConvs((prev) => [j.conversation, ...prev]);
+            setActiveId(convId);
+          }
+          // If persistence is unavailable (no DB), continue in-memory.
         } catch {
           /* continue without persistence */
         }
@@ -645,6 +649,7 @@ export default function ChatApp() {
 
       {/* dialogs */}
       <ModelPicker
+        key={pickerOpen ? "open" : "closed"}
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
         keys={keys}
