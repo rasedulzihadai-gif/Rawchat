@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -31,6 +32,9 @@ async function describeError(res: Response): Promise<string> {
 }
 
 export async function POST(req: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) return new Response("Sign in required", { status: 401 });
+
   const body = await req.json().catch(() => null);
   if (!body) return new Response("Invalid JSON", { status: 400 });
 

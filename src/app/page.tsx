@@ -52,13 +52,21 @@ function Nav() {
           <a href="#features" className="transition hover:text-cream">Features</a>
           <a href="#how" className="transition hover:text-cream">How it works</a>
         </nav>
-        <Link
-          href="/chat"
-          className="group flex items-center gap-1.5 rounded-full bg-cream px-4 py-2 text-sm font-medium text-ink transition hover:bg-accent hover:text-white"
-        >
-          Launch app
-          <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/login"
+            className="rounded-full px-4 py-2 text-sm font-medium text-fog transition hover:text-cream"
+          >
+            Sign in
+          </Link>
+          <Link
+            href="/chat"
+            className="group flex items-center gap-1.5 rounded-full bg-cream px-4 py-2 text-sm font-medium text-ink transition hover:bg-accent hover:text-white"
+          >
+            Launch app
+            <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
+          </Link>
+        </div>
       </div>
     </header>
   );
@@ -429,7 +437,7 @@ function CTA() {
           Start chatting <em className="text-accent not-italic">raw</em>.
         </h2>
         <p className="mx-auto mt-5 max-w-md text-fog">
-          No sign-up. No subscription. Just you, 480+ models, and one beautiful interface.
+          Free to start. Just you, 480+ models, and one beautiful interface.
         </p>
         <Link
           href="/chat"

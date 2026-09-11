@@ -12,7 +12,11 @@ import {
   Check,
   X,
   PanelLeftClose,
+  LogOut,
 } from "lucide-react";
+// Must match RETENTION_DAYS in src/lib/retention.ts (kept local: that module
+// imports the server-only pg driver, which can't ship to the browser).
+const RETENTION_MS = 7 * 24 * 3600 * 1000;
 
 export interface ConvItem {
   id: string;
@@ -33,6 +37,12 @@ function Logo({ size = 22, className = "" }: { size?: number; className?: string
 }
 
 export { Logo };
+
+/** Days left before a conversation auto-deletes (7 days after last activity). */
+function daysLeft(updatedAt: string): number {
+  const expires = new Date(updatedAt).getTime() + RETENTION_MS;
+  return Math.max(0, Math.ceil((expires - Date.now()) / 86400000));
+}
 
 function groupByDate(convs: ConvItem[]) {
   const now = new Date();
@@ -63,6 +73,8 @@ export default function Sidebar({
   onRename,
   onOpenSettings,
   onClose,
+  userEmail,
+  onLogout,
 }: {
   convs: ConvItem[];
   activeId: string | null;
@@ -72,6 +84,8 @@ export default function Sidebar({
   onRename: (id: string, title: string) => void;
   onOpenSettings: () => void;
   onClose: () => void;
+  userEmail: string;
+  onLogout: () => void;
 }) {
   const [query, setQuery] = useState("");
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -148,7 +162,9 @@ export default function Sidebar({
               {g.label}
             </div>
             <ul className="space-y-0.5">
-              {g.items.map((c) => (
+              {g.items.map((c) => {
+                const left = daysLeft(c.updatedAt);
+                return (
                 <li key={c.id} className="group relative">
                   {renaming === c.id ? (
                     <div className="flex items-center gap-1 rounded-lg border border-line-strong bg-elevated px-2 py-1.5">
@@ -172,6 +188,7 @@ export default function Sidebar({
                   ) : (
                     <button
                       onClick={() => onSelect(c.id)}
+                      title={`Auto-deletes ${left} day${left === 1 ? "" : "s"} after last activity`}
                       className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] transition ${
                         activeId === c.id
                           ? "bg-elevated text-cream"
@@ -180,6 +197,11 @@ export default function Sidebar({
                     >
                       <MessageSquare size={14} className="shrink-0 text-muted" />
                       <span className="flex-1 truncate">{c.title}</span>
+                      {left <= 2 && (
+                        <span className="shrink-0 text-[10px] font-medium text-amber-300/90">
+                          {left}d left
+                        </span>
+                      )}
                       <span className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
                         <span
                           role="button"
@@ -210,14 +232,15 @@ export default function Sidebar({
                     </button>
                   )}
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </div>
         ))}
       </div>
 
       {/* footer */}
-      <div className="border-t border-line p-3">
+      <div className="space-y-1 border-t border-line p-3">
         <button
           onClick={onOpenSettings}
           className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] text-fog transition hover:bg-white/[0.045] hover:text-cream"
@@ -225,6 +248,21 @@ export default function Sidebar({
           <Settings size={15} className="text-muted" />
           Keys & settings
         </button>
+        <div className="flex items-center gap-2.5 rounded-lg px-2.5 py-2">
+          <span className="grid size-6 shrink-0 place-items-center rounded-full bg-accent/15 text-[11px] font-semibold text-accent-strong uppercase">
+            {userEmail.charAt(0) || "?"}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-[12.5px] text-muted" title={userEmail}>
+            {userEmail}
+          </span>
+          <button
+            onClick={onLogout}
+            className="flex shrink-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-[12px] text-muted transition hover:bg-white/5 hover:text-cream"
+            title="Sign out"
+          >
+            <LogOut size={13} />
+          </button>
+        </div>
       </div>
     </div>
   );

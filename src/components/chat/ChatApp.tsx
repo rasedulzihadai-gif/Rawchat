@@ -44,7 +44,7 @@ const SUGGESTIONS = [
   },
 ];
 
-export default function ChatApp() {
+export default function ChatApp({ initialUser }: { initialUser: { email: string } }) {
   const [mounted, setMounted] = useState(false);
   const [convs, setConvs] = useState<Conv[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -74,6 +74,10 @@ export default function ChatApp() {
   const refreshConvs = useCallback(async () => {
     try {
       const r = await fetch("/api/conversations");
+      if (r.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
       const j = await r.json().catch(() => ({}));
       if (r.ok) setConvs(j.conversations || []);
       // 503 = no database configured; sidebar simply stays empty.
@@ -180,7 +184,11 @@ export default function ChatApp() {
       if (window.innerWidth < 768) setSidebarOpen(false);
       try {
         const r = await fetch(`/api/conversations/${id}/messages`);
-        const j = await r.json();
+        if (r.status === 401) {
+          window.location.href = "/login";
+          return;
+        }
+        const j = await r.json().catch(() => ({}));
         setMsgs(
           (j.messages || []).map((m: any) => ({
             id: m.id,
@@ -241,6 +249,10 @@ export default function ChatApp() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ providerId: active.providerId, model: active.model }),
           });
+          if (r.status === 401) {
+            window.location.href = "/login";
+            return;
+          }
           const j = await r.json().catch(() => ({}));
           if (r.ok && j.conversation?.id) {
             convId = j.conversation.id;
@@ -324,6 +336,10 @@ export default function ChatApp() {
               .map((m) => ({ role: m.role, content: m.content })),
           }),
         });
+        if (res.status === 401) {
+          window.location.href = "/login";
+          return;
+        }
         if (!res.ok || !res.body) throw new Error(await res.text().catch(() => `HTTP ${res.status}`));
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -416,6 +432,11 @@ export default function ChatApp() {
 
   const stop = useCallback(() => abortRef.current?.abort(), []);
 
+  const logout = useCallback(async () => {
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    window.location.href = "/login";
+  }, []);
+
   /* ── keys / custom providers ──────────────── */
   const handleKeyChange = (id: string, key: string) => {
     store.setKey(id, key);
@@ -496,6 +517,8 @@ export default function ChatApp() {
             onRename={renameConv}
             onOpenSettings={() => setSettingsOpen(true)}
             onClose={() => setSidebarOpen(false)}
+            userEmail={initialUser.email}
+            onLogout={logout}
           />
         </div>
       </div>

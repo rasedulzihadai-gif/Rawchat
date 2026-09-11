@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import ChatApp from "@/components/chat/ChatApp";
+import { getCurrentUser } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Rawchat — App",
@@ -8,6 +10,8 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function ChatPage() {
-  return <ChatApp />;
+export default async function ChatPage() {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  return <ChatApp initialUser={{ email: user.email }} />;
 }

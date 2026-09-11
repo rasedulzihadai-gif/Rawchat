@@ -120,7 +120,8 @@ export default function SettingsDialog({
               <Database size={12.5} /> Conversations ({convCount})
             </h3>
             <p className="mb-2.5 text-[12.5px] text-muted">
-              Chats are stored in your Rawchat database so they survive reloads.
+              Chats are private to your account and auto-delete 7 days after the
+              last message.
             </p>
             <button
               onClick={() => {
