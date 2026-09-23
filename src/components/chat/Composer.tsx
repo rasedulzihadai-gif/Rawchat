@@ -10,14 +10,24 @@ import {
   Code2,
   PenLine,
   Lightbulb,
+  Tags,
+  ImagePlus,
+  X,
+  Loader2,
 } from "lucide-react";
 import { MODES } from "@/lib/providers";
+import {
+  MAX_IMAGES_PER_MESSAGE,
+  filesFromClipboard,
+  processImageFile,
+} from "@/lib/images";
 
 const MODE_ICONS: Record<string, any> = {
   MessageSquare,
   Code2,
   PenLine,
   Lightbulb,
+  Tags,
 };
 
 export default function Composer({
@@ -32,6 +42,8 @@ export default function Composer({
   providerColor,
   onOpenPicker,
   needsSetup,
+  images,
+  onImagesChange,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -44,9 +56,14 @@ export default function Composer({
   providerColor: string;
   onOpenPicker: () => void;
   needsSetup: boolean;
+  images: string[];
+  onImagesChange: (imgs: string[]) => void;
 }) {
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [modeOpen, setModeOpen] = useState(false);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
   const ModeIcon = MODE_ICONS[MODES[mode]?.icon || "MessageSquare"] || MessageSquare;
 
   useEffect(() => {
@@ -60,7 +77,39 @@ export default function Composer({
     taRef.current?.focus();
   }, []);
 
-  const canSend = value.trim().length > 0 && !streaming && !needsSetup;
+  const addFiles = async (files: File[]) => {
+    if (!files.length) return;
+    const room = MAX_IMAGES_PER_MESSAGE - images.length;
+    if (room <= 0) {
+      setAttachError(`Up to ${MAX_IMAGES_PER_MESSAGE} images per message.`);
+      return;
+    }
+    const picked = files.slice(0, room);
+    if (files.length > room) {
+      setAttachError(
+        `Only ${room} more image${room === 1 ? "" : "s"} fit — keeping the first ${room}.`,
+      );
+    } else {
+      setAttachError(null);
+    }
+    setProcessing(true);
+    try {
+      const done: string[] = [];
+      for (const f of picked) {
+        try {
+          done.push(await processImageFile(f));
+        } catch (e) {
+          setAttachError(e instanceof Error ? e.message : "Could not attach image.");
+        }
+      }
+      if (done.length) onImagesChange([...images, ...done]);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const canSend =
+    (value.trim().length > 0 || images.length > 0) && !streaming && !needsSetup && !processing;
 
   return (
     <div className="w-full px-4 pb-4 md:px-6 md:pb-5">
@@ -77,7 +126,55 @@ export default function Composer({
             </span>
           </button>
         )}
+        {mode === "stock" && !needsSetup && (
+          <div className="mb-2 flex w-full items-start gap-2.5 rounded-xl border border-line bg-panel/80 px-4 py-2.5 text-left text-[12.5px] leading-relaxed text-fog">
+            <Tags size={14} className="mt-0.5 shrink-0 text-accent" />
+            <span>
+              Stock mode returns strict title + description + keywords JSON. Attach an
+              image and use a vision-capable model
+              <span className="text-muted"> (e.g. Gemini Flash, GPT-4.1 / 5-mini, Claude, Llama-4-Scout, Qwen-VL)</span>.
+            </span>
+          </div>
+        )}
+        {attachError && (
+          <div className="mb-2 flex w-full items-center gap-2 rounded-xl border border-red-500/25 bg-red-500/[0.07] px-4 py-2 text-[12.5px] text-red-300">
+            <X size={13} className="shrink-0" />
+            <span className="flex-1">{attachError}</span>
+            <button
+              onClick={() => setAttachError(null)}
+              className="shrink-0 font-semibold underline underline-offset-2"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
         <div className="rounded-[26px] border border-line-strong bg-elevated/90 shadow-[0_18px_60px_-18px_rgba(0,0,0,0.7)] backdrop-blur transition-colors focus-within:border-cream/25">
+          {images.length > 0 && (
+            <div className="flex flex-wrap gap-2 px-4 pt-3.5">
+              {images.map((src, i) => (
+                <div key={i} className="group/img relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={src}
+                    alt={`Attachment ${i + 1}`}
+                    className="h-16 w-16 rounded-xl border border-line-strong object-cover"
+                  />
+                  <button
+                    onClick={() => onImagesChange(images.filter((_, j) => j !== i))}
+                    className="absolute -top-1.5 -right-1.5 grid size-5 place-items-center rounded-full border border-line-strong bg-raised text-fog transition hover:text-cream"
+                    title="Remove image"
+                  >
+                    <X size={11} />
+                  </button>
+                </div>
+              ))}
+              {processing && (
+                <div className="grid h-16 w-16 place-items-center rounded-xl border border-dashed border-line-strong text-muted">
+                  <Loader2 size={16} className="animate-spin" />
+                </div>
+              )}
+            </div>
+          )}
           <textarea
             ref={taRef}
             value={value}
@@ -88,13 +185,48 @@ export default function Composer({
                 if (canSend) onSend();
               }
             }}
+            onPaste={(e) => {
+              const files = filesFromClipboard(e);
+              if (files.length) {
+                e.preventDefault();
+                addFiles(files);
+              }
+            }}
             rows={1}
             placeholder={
-              needsSetup ? "Connect a provider first…" : "Reply to Rawchat…"
+              needsSetup
+                ? "Connect a provider first…"
+                : mode === "stock"
+                  ? "Attach an image to tag it… (optional note)"
+                  : "Reply to Rawchat…"
             }
             className="max-h-[220px] w-full resize-none bg-transparent px-5 pt-4 pb-1 text-[15px] leading-relaxed text-cream outline-none placeholder:text-muted"
           />
           <div className="flex items-center gap-2 px-3 pt-1 pb-3">
+            {/* attach */}
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                addFiles(Array.from(e.target.files || []));
+                e.target.value = "";
+              }}
+            />
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={processing}
+              className="grid size-8 place-items-center rounded-full border border-line text-fog transition hover:border-cream/25 hover:text-cream disabled:opacity-40"
+              title="Attach images (or paste from clipboard)"
+            >
+              {processing ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <ImagePlus size={14} />
+              )}
+            </button>
             {/* mode picker */}
             <div className="relative">
               <button

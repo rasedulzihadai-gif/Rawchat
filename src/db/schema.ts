@@ -46,6 +46,8 @@ export const messages = pgTable(
       .references(() => conversations.id, { onDelete: "cascade" }),
     role: text("role").notNull(), // "user" | "assistant" | "system"
     content: text("content").notNull(),
+    // Attached image data-URLs for vision messages (null = none, pre-vision rows).
+    images: text("images").array(),
     model: text("model").notNull().default(""),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

@@ -16,6 +16,21 @@ npm run dev            # → http://localhost:3000
 Open `/login`, create an account, then add a provider key in the app
 (Groq has a free tier that takes ~30 seconds).
 
+## Images & Stock mode
+
+- Attach up to 4 images per message (file picker or paste from clipboard).
+  Images are downscaled (max 1568px) and JPEG-compressed in the browser,
+  sent to providers as OpenAI `image_url` parts (or Anthropic native image
+  blocks), and saved with the message so they survive reloads.
+- The **Stock** mode turns any vision-capable model (e.g. Gemini Flash,
+  GPT-4.1 / 5-mini, Claude, Llama-4-Scout, Qwen-VL) into a stock-image
+  metadata expert: it returns strict `{"title", "description", "keywords"}`
+  JSON with enforced color keywords, use-case keywords, and filler limits.
+  Temperature is lowered to 0.2 in this mode for deterministic output.
+- After pulling this change, run `npm run db:push` (or `npm run db:migrate`)
+  to add the nullable `messages.images` column — no data loss, old rows just
+  have no images.
+
 ## Accounts & security
 
 - Email + password auth. Passwords hashed with bcrypt (cost 12).

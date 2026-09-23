@@ -10,10 +10,37 @@ export interface ChatMsg {
   dbId?: string;
   role: "user" | "assistant";
   content: string;
+  /** Attached image data-URLs (vision messages). */
+  images?: string[];
   model?: string;
   reasoning?: string;
   streaming?: boolean;
   error?: string;
+}
+
+function AttachedImages({ images }: { images: string[] }) {
+  if (!images.length) return null;
+  return (
+    <div className="mb-2 flex flex-wrap gap-2">
+      {images.map((src, i) => (
+        <a
+          key={i}
+          href={src}
+          target="_blank"
+          rel="noreferrer"
+          title="Open image in full size"
+          className="block overflow-hidden rounded-xl border border-line-strong transition hover:border-cream/30"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={src}
+            alt={`Attached image ${i + 1}`}
+            className="h-28 w-auto max-w-[220px] object-cover"
+          />
+        </a>
+      ))}
+    </div>
+  );
 }
 
 function CopyBtn({ text, label }: { text: string; label?: string }) {
@@ -70,9 +97,12 @@ export default function MessageList({
       {msgs.map((m) =>
         m.role === "user" ? (
           <div key={m.id} className="group animate-fade-up">
-            <div className="w-fit max-w-[88%] rounded-2xl rounded-bl-md border border-line bg-elevated px-4 py-3 text-[15px] leading-relaxed whitespace-pre-wrap text-cream">
-              {m.content}
-            </div>
+            {m.images && m.images.length > 0 && <AttachedImages images={m.images} />}
+            {m.content && (
+              <div className="w-fit max-w-[88%] rounded-2xl rounded-bl-md border border-line bg-elevated px-4 py-3 text-[15px] leading-relaxed whitespace-pre-wrap text-cream">
+                {m.content}
+              </div>
+            )}
             <div className="mt-1.5 flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
               <CopyBtn text={m.content} label="Copy" />
               <button

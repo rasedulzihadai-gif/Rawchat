@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PanelLeft, MonitorPlay, ChevronDown, Code2, MessageSquare, PenLine, Lightbulb } from "lucide-react";
+import { PanelLeft, MonitorPlay, ChevronDown, Code2, MessageSquare, PenLine, Lightbulb, Tags } from "lucide-react";
 import Sidebar, { Logo, type ConvItem } from "./Sidebar";
 import MessageList, { type ChatMsg } from "./MessageList";
 import Composer from "./Composer";
@@ -17,7 +17,22 @@ interface Conv extends ConvItem {
   providerId: string;
 }
 
-const SUGGESTIONS = [
+const SUGGESTIONS: {
+  icon: any;
+  mode: string;
+  title: string;
+  text: string;
+  sub?: string;
+  prefill?: boolean;
+}[] = [
+  {
+    icon: Tags,
+    mode: "stock",
+    title: "Tag a stock image",
+    text: "",
+    sub: "Attach artwork or a photo — get back a strict title, description + 40–50 keywords JSON.",
+    prefill: true,
+  },
   {
     icon: Code2,
     mode: "code",
@@ -50,6 +65,7 @@ export default function ChatApp({ initialUser }: { initialUser: { email: string 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [msgs, setMsgs] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
+  const [attachments, setAttachments] = useState<string[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
 
@@ -169,6 +185,7 @@ export default function ChatApp({ initialUser }: { initialUser: { email: string 
     setActiveId(null);
     setMsgs([]);
     setInput("");
+    setAttachments([]);
     setPreviewOpen(false);
     if (window.innerWidth < 768) setSidebarOpen(false);
   }, []);
@@ -195,6 +212,7 @@ export default function ChatApp({ initialUser }: { initialUser: { email: string 
             dbId: m.id,
             role: m.role,
             content: m.content,
+            images: Array.isArray(m.images) ? m.images : undefined,
             model: m.model || undefined,
           })),
         );
@@ -233,13 +251,15 @@ export default function ChatApp({ initialUser }: { initialUser: { email: string 
   const send = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
-      if (!trimmed || streaming) return;
+      if ((!trimmed && attachments.length === 0) || streaming) return;
       if (!provider || needsSetup) {
         setPickerOpen(true);
         setInput(trimmed);
         return;
       }
       setInput("");
+      const outgoingImages = attachments.slice(0, 4);
+      setAttachments([]);
 
       let convId = activeId;
       if (!convId) {
@@ -271,14 +291,23 @@ export default function ChatApp({ initialUser }: { initialUser: { email: string 
         }).catch(() => {});
       }
 
-      const userMsg: ChatMsg = { id: uid(), role: "user", content: trimmed };
+      const userMsg: ChatMsg = {
+        id: uid(),
+        role: "user",
+        content: trimmed,
+        ...(outgoingImages.length ? { images: outgoingImages } : {}),
+      };
       setMsgs((prev) => [...prev, userMsg]);
 
       if (convId) {
         fetch(`/api/conversations/${convId}/messages`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role: "user", content: trimmed }),
+          body: JSON.stringify({
+            role: "user",
+            content: trimmed,
+            ...(outgoingImages.length ? { images: outgoingImages } : {}),
+          }),
         })
           .then((r) => r.json())
           .then((j) => {
@@ -291,7 +320,7 @@ export default function ChatApp({ initialUser }: { initialUser: { email: string 
       await runStreamWithConv([...msgsRef.current.filter((m) => !m.streaming && !m.error), userMsg], convId);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [streaming, provider, needsSetup, activeId, active, patchMsg],
+    [streaming, provider, needsSetup, activeId, active, patchMsg, attachments],
   );
 
   // runStream needs the latest convId even just-created; wrap it
@@ -331,9 +360,15 @@ export default function ChatApp({ initialUser }: { initialUser: { email: string 
             api: "api" in provider ? provider.api : "openai",
             model: active.model,
             system: MODES[active.mode]?.prompt,
+            // Stock metadata must be deterministic, rule-following JSON.
+            temperature: active.mode === "stock" ? 0.2 : 0.7,
             messages: history
-              .filter((m) => !m.error && m.content)
-              .map((m) => ({ role: m.role, content: m.content })),
+              .filter((m) => !m.error && (m.content || (m.images && m.images.length)))
+              .map((m) => ({
+                role: m.role,
+                content: m.content,
+                ...(m.images && m.images.length ? { images: m.images } : {}),
+              })),
           }),
         });
         if (res.status === 401) {
@@ -610,6 +645,8 @@ export default function ChatApp({ initialUser }: { initialUser: { email: string 
                           if (needsSetup) {
                             setInput(s.text);
                             setPickerOpen(true);
+                          } else if (s.prefill) {
+                            setInput(s.text);
                           } else {
                             send(s.text);
                           }
@@ -623,7 +660,7 @@ export default function ChatApp({ initialUser }: { initialUser: { email: string 
                         <span>
                           <span className="block text-[13.5px] font-medium text-cream">{s.title}</span>
                           <span className="mt-0.5 line-clamp-2 block text-[12px] leading-relaxed text-muted">
-                            {s.text}
+                            {s.sub || s.text}
                           </span>
                         </span>
                       </button>
@@ -654,6 +691,8 @@ export default function ChatApp({ initialUser }: { initialUser: { email: string 
               providerColor={providerColor}
               onOpenPicker={() => setPickerOpen(true)}
               needsSetup={needsSetup}
+              images={attachments}
+              onImagesChange={setAttachments}
             />
           </div>
           {previewOpen && artifact && (

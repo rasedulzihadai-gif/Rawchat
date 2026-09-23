@@ -73,12 +73,17 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       return NextResponse.json({ error: "Conversation not found." }, { status: 404 });
     }
 
+    const images = Array.isArray(body.images)
+      ? body.images.filter((u: unknown) => typeof u === "string" && u.length > 0).slice(0, 4)
+      : [];
+
     const [msg] = await db
       .insert(messages)
       .values({
         conversationId: id,
         role: body.role,
         content: body.content,
+        images: images.length ? images : null,
         model: body.model || "",
       })
       .returning();
@@ -92,8 +97,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         .from(conversations)
         .where(and(eq(conversations.id, id), eq(conversations.userId, g.user.id)));
       if (!conv || conv.title === "New chat") {
-        update.title =
-          body.content.replace(/\s+/g, " ").trim().slice(0, 60) || "New chat";
+        const seed = body.content.replace(/\s+/g, " ").trim().slice(0, 60);
+        update.title = seed || (images.length ? "Image chat" : "New chat");
       }
     }
     await db
