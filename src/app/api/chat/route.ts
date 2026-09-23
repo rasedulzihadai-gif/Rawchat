@@ -7,6 +7,8 @@ export const maxDuration = 300;
 interface IncomingMessage {
   role: "user" | "assistant" | "system";
   content: string;
+  /** Image data-URLs (or remote URLs) for vision-capable models. */
+  images?: string[];
 }
 
 function sse(type: string, data: Record<string, unknown>): string {
@@ -47,6 +49,13 @@ export async function POST(req: NextRequest) {
     system?: string;
     extraHeaders?: Record<string, string>;
   };
+  const temperature =
+    typeof body.temperature === "number" &&
+    Number.isFinite(body.temperature) &&
+    body.temperature >= 0 &&
+    body.temperature <= 2
+      ? body.temperature
+      : 0.7;
 
   if (!baseUrl || !model || !Array.isArray(messages)) {
     return new Response("Missing baseUrl, model or messages", { status: 400 });
@@ -59,9 +68,15 @@ export async function POST(req: NextRequest) {
         controller.enqueue(encoder.encode(sse(type, data)));
       try {
         if (api === "anthropic") {
-          await streamAnthropic({ baseUrl, apiKey, model, messages, system }, send);
+          await streamAnthropic(
+            { baseUrl, apiKey, model, messages, system, temperature },
+            send,
+          );
         } else {
-          await streamOpenAI({ baseUrl, apiKey, model, messages, system, extraHeaders }, send);
+          await streamOpenAI(
+            { baseUrl, apiKey, model, messages, system, extraHeaders, temperature },
+            send,
+          );
         }
         send("done", {});
       } catch (err) {
@@ -84,6 +99,65 @@ export async function POST(req: NextRequest) {
 
 type Sender = (type: string, data: Record<string, unknown>) => void;
 
+type OpenAIContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
+function cleanImages(m: IncomingMessage): string[] {
+  return (m.images || [])
+    .filter((u) => typeof u === "string" && u.length > 0)
+    .slice(0, 4);
+}
+
+/** OpenAI vision format: `content` becomes text + image_url parts. */
+function toOpenAIMessage(m: IncomingMessage): {
+  role: string;
+  content: string | OpenAIContentPart[];
+} {
+  const images = cleanImages(m);
+  if (!images.length) return { role: m.role, content: m.content };
+  return {
+    role: m.role,
+    content: [
+      { type: "text", text: m.content || "Please analyze the attached image." },
+      ...images.map((url) => ({
+        type: "image_url" as const,
+        image_url: { url },
+      })),
+    ],
+  };
+}
+
+function parseDataUrl(url: string): { mediaType: string; data: string } | null {
+  const m = /^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/.exec(url);
+  return m ? { mediaType: m[1], data: m[2] } : null;
+}
+
+/** Anthropic native format: `content` becomes image + text blocks. */
+function toAnthropicContent(
+  m: IncomingMessage,
+): string | Array<Record<string, unknown>> {
+  const images = cleanImages(m);
+  if (!images.length) return m.content;
+  const blocks: Array<Record<string, unknown>> = [];
+  for (const url of images) {
+    const parsed = parseDataUrl(url);
+    if (parsed) {
+      blocks.push({
+        type: "image",
+        source: { type: "base64", media_type: parsed.mediaType, data: parsed.data },
+      });
+    } else if (/^https?:\/\//.test(url)) {
+      blocks.push({ type: "image", source: { type: "url", url } });
+    }
+  }
+  blocks.push({
+    type: "text",
+    text: m.content || "Please analyze the attached image.",
+  });
+  return blocks;
+}
+
 async function streamOpenAI(
   opts: {
     baseUrl: string;
@@ -92,13 +166,15 @@ async function streamOpenAI(
     messages: IncomingMessage[];
     system?: string;
     extraHeaders?: Record<string, string>;
+    temperature?: number;
   },
   send: Sender,
 ) {
   const url = `${opts.baseUrl.replace(/\/+$/, "")}/chat/completions`;
-  const msgs: IncomingMessage[] = opts.system
+  const raw: IncomingMessage[] = opts.system
     ? [{ role: "system", content: opts.system }, ...opts.messages.filter((m) => m.role !== "system")]
     : opts.messages;
+  const msgs = raw.map(toOpenAIMessage);
 
   const res = await fetch(url, {
     method: "POST",
@@ -113,7 +189,7 @@ async function streamOpenAI(
       model: opts.model,
       messages: msgs,
       stream: true,
-      temperature: 0.7,
+      temperature: opts.temperature ?? 0.7,
       stream_options: { include_usage: true },
     }),
   });
@@ -170,6 +246,7 @@ async function streamAnthropic(
     model: string;
     messages: IncomingMessage[];
     system?: string;
+    temperature?: number;
   },
   send: Sender,
 ) {
@@ -185,10 +262,11 @@ async function streamAnthropic(
       model: opts.model,
       max_tokens: 8192,
       stream: true,
+      temperature: Math.min(1, Math.max(0, opts.temperature ?? 0.7)),
       ...(opts.system ? { system: opts.system } : {}),
       messages: opts.messages
         .filter((m) => m.role !== "system")
-        .map((m) => ({ role: m.role, content: m.content })),
+        .map((m) => ({ role: m.role, content: toAnthropicContent(m) })),
     }),
   });
 

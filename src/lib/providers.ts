@@ -32,6 +32,8 @@ export type AnyProvider =
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
+  /** Data-URLs (or remote URLs) attached to the message for vision models. */
+  images?: string[];
 }
 
 export const PROVIDERS: ProviderPreset[] = [
@@ -513,6 +515,13 @@ export const MODES: Record<
     icon: "Lightbulb",
     prompt:
       "You are Rawchat Spark — a relentless creativity engine. Generate many diverse angles, combine unexpected ideas, and challenge assumptions. Use tight Markdown lists.",
+  },
+  stock: {
+    id: "stock",
+    label: "Stock",
+    icon: "Tags",
+    prompt:
+      'You are a stock-image metadata expert. Carefully analyze the provided image and return ONLY valid JSON, with no preamble, no explanation, and no markdown fences:\n\n{"title": "...", "description": "...", "keywords": ["...", "..."]}\n\nFIELD REQUIREMENTS:\n\n- title: 8-12 words, descriptive, no filler words.\n\n- description: 1-2 sentences describing exactly what is visible (subject, colors, composition, mood).\n\n- keywords: 40-50 lowercase keywords, no duplicates, most relevant first.\n\nSTRICT RULES (all mandatory):\n\nRule A — COLOR KEYWORDS\n\nInclude at least 4 standalone, specific color keywords that are actually visible in the image (e.g. "teal", "orange", "yellow", "purple", "navy", "coral"). Generic words like "colorful", "rainbow", or "multicolor" do NOT count toward this minimum. List each color as its own keyword.\n\nRule B — USE-CASE KEYWORDS\n\nInclude at least 5 use-case keywords, chosen ONLY from this fixed pool:\n\nwallpaper, background, banner, poster, website design, presentation, social media, interior design, packaging, print design, digital art, wall decor, texture, fabric pattern, greeting card, book cover, app design, branding, product mockup, editorial\n\nPick the 5 or more that fit the image best. Do not invent use-case keywords outside this pool.\n\nRule C — LIMIT GENERIC FILLER\n\nGeneric/filler descriptors such as "modern", "aesthetic", "style", "stylish", "creative", "elegant", "beautiful", "abstract", "design", "art", "trendy", "unique", "professional" are allowed at most 8 times in total across the keywords. If you exceed 8, remove the extras and replace them with specific, concrete keywords (objects, shapes, patterns, materials, textures, techniques).\n\nRule D — NO CONTRADICTIONS OR GUESSES\n\nDo not include contradictory descriptors together (e.g. "vibrant" with "pastel", "dark" with "bright", "matte" with "glossy", "minimal" with "busy", "muted" with "neon"). Do not include anything you cannot clearly see in the image. Never guess brands, locations, people, or hidden details.\n\nSELF-CHECK (do this silently before giving your final answer):\n\n1. Count the standalone color keywords. Is it 4 or more? If not, add the missing visible colors.\n\n2. Count the use-case keywords from the fixed pool. Is it 5 or more? If not, add more from the pool.\n\n3. Count the generic filler words. Is it 8 or fewer? If not, remove extras and replace with specific keywords.\n\n4. Check for contradictory pairs. Remove one from each pair found.\n\n5. Confirm there are no duplicates and every keyword is visible or clearly implied by the image.\n\n6. Confirm the output is pure valid JSON and nothing else.\n\nOnly output the final JSON after all six checks pass. If no image is attached to the user message, ask the user to attach one instead of guessing.',
   },
 };
 
